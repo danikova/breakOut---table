@@ -1,0 +1,246 @@
+<style>
+  body{
+    margin: 0;
+    padding: 40px;
+    background: radial-gradient(rgb(120,120,120),rgb(255,255,255));
+  }
+  h2{
+    font-family: 'Josefin Sans', sans-serif;
+    text-align: center;
+    font-size: 50;
+  }
+
+  .container{
+    position: relative;
+    margin: auto;
+    padding: 5px;
+    width: 70%;
+    height: 70%;
+    border: 2px solid black;
+    background: rgb(50,50,50);
+    box-shadow: 0px 0px 50px black;
+    cursor: none;
+  }
+
+  .box{
+    box-shadow: inset 0px 0px 10px black;
+    margin: 2px;
+    border: 1px solid black;
+    background: rgb(0,0,0);
+    width: 50px;
+    height: 50px;
+    display: inline-flex;
+    border-radius: 2px;
+  }
+
+  .ball{
+    margin: 2px;
+    box-shadow: inset 0px 0px 2px rgb(50,50,50);
+    background-color: red;
+    border-radius: 100%;
+    height: 14px;
+    width: 14px;
+  }
+
+</style>
+<h2>Atari - BreakOut</h2>
+<div class="container"></div>
+
+<link href="https://fonts.googleapis.com/css?family=Josefin+Sans" rel="stylesheet">
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+<script>
+
+  $(function(){
+      var bo = new BreakOut("container");
+  });
+
+  class BreakOut {
+    constructor(t_container) {
+      this.container = $("."+t_container);
+      this.blocks = [];
+      let colors = ['#f44141','#eef442','#45f748','#4483f7']
+      let width = this.container.width();
+      let height = this.container.height();
+      let iterate = 20;
+      var self = this;
+
+      this.game_run = false;
+      this.a_sound = new Audio('a_sound.wav');
+      this.b_sound = new Audio('b_sound.wav');
+
+      // building blocks
+      for(let height = 0 ; height < 4 ; height++){
+        for(let cell = 0 ; cell<iterate ; cell++){
+            let child = $('<div class="box"></div>')
+            child.css('background-color',colors[height]);
+            child.css('width',width/iterate - 6);
+            child.css('height',width/iterate - 6);
+            this.container.append(child);
+
+            this.blocks.push(child);
+        }
+      }
+
+
+      // create blocker object
+      this.blocker = {
+        node : $('<div class="box"></div>'),
+        width : 200,
+        height : 10,
+        parent : null,
+        posY : 0,
+        constr : function(class_,c_w,c_h){
+          this.parent = class_.container;
+
+          this.node.css('width',this.width);
+          this.node.css('height',this.height);
+          this.node.css('display','block');
+          this.node.css('position','absolute');
+          this.node.css('border','none');
+          this.node.attr('id','blocker');
+
+          this.node.offset({
+            left:(c_w/2) - (this.width/2 - 1),
+            top:c_h - 10 - this.height
+          });
+
+          class_.container.append(this.node);
+          class_.blocks.push(this.node);
+        },
+        setBlockerPos : function(event){
+          var parentOffset = this.parent.offset();
+          var new_pos = event.pageX - parentOffset.left - this.width/2;
+          if(new_pos < 0){
+            new_pos = 0;
+          }
+          else if (new_pos > this.parent.width() - this.width + 6) {
+            new_pos = this.parent.width() - this.width + 6;
+          }
+          this.node.css('left',new_pos);
+          return new_pos + this.width/2;
+        }
+      };
+      this.blocker.constr(this,width,height);
+      this.container.mousemove(function(event){
+        var new_pos = self.blocker.setBlockerPos(event);
+        if(!self.game_run){
+          self.ball.beforeGame(new_pos);
+        }
+      });
+
+      // creating ball object
+      this.ball = {
+        node : $('<div class="ball"><img></img></div>'),
+        y : 0,
+        x : 0,
+        vel: { x : 0, y : 0 },
+        speed : 2.5,
+        parent_off: null,
+        parent_size: null,
+        constr : function(container,x,y) {
+          this.parent_off = container.offset();
+          this.parent_size = {
+            width : container.width(),
+            height : container.height()
+          };
+
+          this.node.css('display','block');
+          this.node.css('position','absolute');
+
+          this.x = x;
+          this.y = y;
+          this.drawXY();
+
+          this.speed = 2.5;
+          this.setVel();
+
+          container.append(this.node);
+        },
+        setVel : function(deg = 0){
+          this.vel.x = this.speed * Math.cos((-90 + deg) / 180 * 3.14);
+          this.vel.y = this.speed * Math.sin((-90 + deg) / 180 * 3.14);
+        },
+        setSpeed : function(speed) {
+          this.vel.x /= this.speed;
+          this.vel.y /= this.speed;
+
+          this.speed = speed;
+          this.vel.x *= this.speed;
+          this.vel.y *= this.speed;
+        },
+        beforeGame : function(newX){
+          this.x = newX - 7;
+          this.drawXY();
+        },
+        drawXY : function(){
+          this.node.css('top',this.y);
+          this.node.css('left',this.x);
+        },
+        move : function(blocks){
+
+          // add velocity
+          this.x += this.vel.x;
+          this.y += this.vel.y;
+
+          // block collossion
+          for(let b of blocks){
+            if(b.css('visibility') != 'hidden'){
+              var top = b.offset().top;
+              var left = b.offset().left;
+              var width = b.width();
+              var height = b.height();
+
+              var horizontal = this.y + 14 > top - this.parent_off.top && this.y < top + height - this.parent_off.top;
+              var vertical = this.x + 7 > left - this.parent_off.left && this.x + 7 < left + width - this.parent_off.left;
+              if(horizontal && vertical){
+                if(this.y < top - this.parent_off.top || this.y + 14 > top + height - this.parent_off.top){
+                  this.vel.y *= -1;
+                }
+                else if(this.x < left - this.parent_off.left || this.x + 14 > left + width - this.parent_off.left){
+                  this.vel.x *= -1;
+                }
+
+                if(b.attr('id') == null){
+                  b.css('visibility','hidden');
+                  this.setSpeed(this.speed + 0.1);
+                  self.b_sound.play();
+                }
+                else{
+                  var deg = this.x - (left + width- this.parent_off.left) + width/2 + 10;
+                  this.setVel(deg * 0.6);
+                  self.a_sound.play();
+                }
+
+              }
+            }
+          }
+
+          // wall collossion
+          if(this.x < 0 - 3 || this.parent_size.width - 6 < this.x){
+            this.vel.x *= -1;
+          }
+          if(this.y < 0 - 3 || this.parent_size.height - 6 < this.y){
+            this.vel.y *= -1;
+          }
+
+          // drawing ball
+          this.drawXY();
+        }
+      }
+      this.ball.constr(
+        this.container,
+        parseFloat(this.blocker.node.css('left').replace('px','')) + this.blocker.width/2 - 7,
+        parseFloat(this.blocker.node.css('top').replace('px','')) - 14
+      );
+      this.container.click(function(){
+        self.game_run = true;
+        setInterval(function(){
+          self.ball.move(self.blocks);
+        },16);
+      });
+
+
+    }
+  }
+
+</script>

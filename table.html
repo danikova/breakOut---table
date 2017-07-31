@@ -1,0 +1,128 @@
+
+<style>
+  body{
+      padding: 0px;
+      margin: 0px;
+  }
+  .bigtable{
+    border: 1px solid black;
+    height: 500px;
+    border-collapse: collapse;
+    padding: 0px;
+    margin: 0px;
+  }
+  .scrollbarCont{
+    border: 1px solid;
+    position: fixed;
+    top: 0px;
+    left: calc(100% - 10px);
+    width: 10px;
+    padding: 0px;
+    margin: 0px;
+  }
+  .scrollbar{
+    width: 10px;
+    height: 10px;
+    background-color: black;
+    padding: 0px;
+    margin: 0px;
+    display: inline-block;
+  }
+  tr{
+    height: 20px;
+  }
+  td{
+    min-width: 200px !important;
+    border: 1px solid black;
+  }
+</style>
+<div style="width: calc(100% - 10px); overflow-x: scroll;">
+  <table class="bigtable">
+  </table>
+</div>
+<div class="scrollbarCont">
+    <div class="scrollbar"><img></img></div>
+</div>
+
+
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+<script>
+
+  $(function(){
+    var table = new Table('bigtable');
+    var scrollBar = new Bar('scrollbarCont','scrollbar',table);
+  });
+
+  class Bar {
+    constructor(container,scrollbar,table){
+      this.container = $('.'+container);
+      this.actRow = 0;
+      var height = table.container.height();
+      this.scrollBar = $('.'+scrollbar);
+
+
+      this.container.height(height);
+      this.scrollBar.height(height/(table.maxRow / table.visibleRows));
+      this.scrollBar.click(function(){
+        
+      });
+
+    }
+  }
+
+  class Table {
+    constructor(container){
+      this.container = $('.'+container);
+
+      var tr_height = 20;
+      var cont_height = 500;
+      var self = this;
+
+      this.actRow = 0;
+      this.visibleRows = cont_height/tr_height;
+      this.maxRow = 100;
+
+      var data = [];
+      for (var i = 0; i < this.maxRow; i++) {
+        var tempData = []
+        for (var j = 0; j < 30; j++) {
+          tempData.push(i+1);
+        }
+        data.push(tempData);
+      }
+
+      for (var i = 0; i < this.visibleRows; i++) {
+        var actTr = $('<tr></tr>');
+        for (var j = 0; j < 30; j++) {
+          actTr.append($('<td contenteditable>'+data[i][j]+'</td>'));
+        }
+        this.container.append(actTr);
+      }
+
+      this.container.bind('mousewheel DOMMouseScroll', function(event){
+        // lefele  +
+        // felfele -
+        if(event.originalEvent.deltaY > 0 && self.actRow + 25 < data.length ){
+          self.actRow += 1;
+          for (var i = 0; i < this.visibleRows; i++) {
+            var actTr = $(self.container.find('tr')[i]);
+            for (var j = 0; j < 30; j++) {
+              $(actTr.find('td')[j]).html(data[i+self.actRow][j]);
+            }
+          }
+        }else if(self.actRow > 0){
+          self.actRow -= 1;
+          for (var i = 0; i < this.visibleRows; i++) {
+            var actTr = $(self.container.find('tr')[i]);
+            for (var j = 0; j < 30; j++) {
+              $(actTr.find('td')[j]).html(data[i+self.actRow][j]);
+            }
+          }
+        }
+
+      });
+
+    }
+  }
+
+</script>
