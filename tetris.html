@@ -1,0 +1,554 @@
+<style>
+
+@font-face { font-family: monospaceLight; src: url('Cherry Monospace-Light.ttf') format('truetype'); }
+
+  body{
+    margin: 0;
+    padding: 0;
+    background: #427df4;
+  }
+
+  .header{
+    width: 100%;
+    height: 80px;
+    box-sizing: border-box;
+  }
+
+  .footer{
+    width: 100%;
+    height: 30px;
+    box-sizing: border-box;
+  }
+
+  .lower-container{
+    display: flex;
+  }
+
+  .tetris-box{
+    width: 450px;
+    position: relative;
+    background: rgb(50,50,50);
+    height: calc(100% - 110px);
+    box-sizing: border-box;
+    border: 5px solid #2f60af;
+  }
+
+  .tetris-table{
+    box-sizing: border-box;
+    border: 1px solid white;
+    border-collapse: collapse;
+  }
+
+  .left-desc-box{
+    width: 25%;
+    height: calc(100% - 110px);
+    box-sizing: border-box;
+  }
+
+  .right-desc-box{
+    position: relative;
+    flex: 1;
+    height: calc(100% - 110px);
+    box-sizing: border-box;
+  }
+
+  .box{
+    border: 1px solid rgb(50,50,50);
+    background: rgb(0,0,0);
+    width: 50px;
+    padding: 0;
+  }
+
+  .floating_score{
+    font-family: 'monospaceLight';
+    font-size: 65;
+    color: white;
+    position: absolute;
+  }
+
+  .points{
+    font-family: 'monospaceLight';
+    font-size: 65;
+    text-align: center;
+    line-height: 88px;
+    color: white;
+    width: 300px;
+    height: 100px;
+    margin-left: 30px;
+    margin-top: 30px;
+    background: rgb(20,20,20);
+    box-sizing: border-box;
+    border: 5px solid #2f60af;
+  }
+
+  .level{
+    font-size: 45;
+  }
+
+  .next{
+    height: 300px;
+  }
+
+  .modalDialog {
+    position: fixed;
+    font-family: 'monospaceLight';
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    background: rgba(0, 0, 0, 0.8);
+    z-index: 99999;
+    opacity:0;
+    -webkit-transition: opacity 400ms ease-in;
+    -moz-transition: opacity 400ms ease-in;
+    transition: opacity 400ms ease-in;
+    pointer-events: none;
+  }
+  .modalDialog > div {
+      width: 400px;
+      height: 200px;
+      font-size: 30;
+      position: relative;
+      margin: 10% auto;
+      padding: 20px;
+  }
+
+</style>
+<html>
+  <head>
+      <title> Tetris </title>
+  </head>
+  <body>
+
+      <div class="header"></div>
+
+      <div class="lower-container">
+        <div class="left-desc-box"></div>
+        <div class="tetris-box">
+            <table class="tetris-table"></table>
+        </div>
+        <div class="right-desc-box">
+          <div class="points">000000</div>
+          <div class="points level">Level: <span>1</span></div>
+          <div class="points next"></div>
+        </div>
+      </div>
+
+      <div class="footer"></div>
+  </body>
+
+  <div id="openModal" class="modalDialog">
+      <div class='points'>
+          <h2 style="margin: 0;">Final Score:</h2>
+          <div class="final_score"></div>
+      </div>
+  </div>
+</html>
+
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+<link href="https://fonts.googleapis.com/css?family=Josefin+Sans" rel="stylesheet">
+<script>
+
+  $(function(){
+    var tetris = new Tetris('tetris-box','next');
+  });
+
+  class Tetris {
+    constructor(container,next_container) {
+      // initializing variables
+      var self = this;
+      this.defaultSpeed = 750;
+      this.fallingSpeed = 750;
+      this.highestPoint = 0;
+      this.a_sound = new Audio('a_sound.wav');
+      this.b_sound = new Audio('b_sound.wav');
+      this.a_or_b = true;
+
+      this.tds = this.makeTable(container,20,13);
+      this.next_tds = this.makeTable(next_container,5,5);
+
+      // generating falling model
+      this.actModel = this.generateNewModel();
+      this.nextModel = this.generateNewModel();
+
+      // gamemain fn
+      this.gameInterval = function(){
+
+        clearInterval(interval);
+
+        if(self.highestPoint >= self.tds.length){
+          if($('.modalDialog').css('opacity') != 1){
+            $('.final_score').html($($('.points')[0]).html());
+            $('.modalDialog').animate({
+              opacity: 1
+            },200);
+          }
+        }else{
+
+          if(self.collision(0,1)){
+            // freezing pos if collision
+            self.setPos();
+            self.actModel = self.nextModel;
+            self.nextModel = self.generateNewModel();
+            self.rowIsSaturated();
+          }else{
+            // move falling model down
+            self.actModel.posY += 1;
+          }
+
+          // drawing map
+          self.drawModel(self.actModel,self.tds);
+          self.drawModel(self.nextModel,self.next_tds,
+            (self.nextModel.node.n == 4) ? {x : 0, y: 0} : {x : 1, y: 1}
+          );
+          if(self.fallingSpeed == self.defaultSpeed){
+            self.playSound();
+          }
+
+          interval = setInterval(self.gameInterval,self.fallingSpeed);
+        }
+      }
+      var interval = setInterval(self.gameInterval,self.fallingSpeed);
+
+      // binding keys
+      $('body').keydown(function(event){
+        // 37 left
+        // 38 up
+        // 39 right
+        // 40 down
+        if(self.fallingSpeed != this.defaultSpeed){
+          self.playSound();
+        }
+        switch (event.which) {
+          case 37:
+            if(!self.collision(-1 , 0)){
+              self.actModel.posX += -1;
+            }
+          break;
+          case 38:
+            do{
+              self.actModel.node.rotate();
+            }while(self.collision(0 , 0));
+          break;
+          case 39:
+            if(!self.collision(1 , 0)){
+              self.actModel.posX += 1;
+            }
+          break;
+          case 40:
+            self.fallingSpeed = self.defaultSpeed / 2;
+            self.gameInterval();
+          break;
+        }
+
+        self.drawModel(self.actModel,self.tds);
+        self.drawModel(self.nextModel,self.next_tds,
+          (self.nextModel.node.n == 4) ? {x : 0, y: 0} : {x : 1, y: 1}
+        );
+
+      });
+      $('body').keyup(function(event){
+        if(event.which == 40){
+          self.fallingSpeed = self.defaultSpeed;
+          self.gameInterval();
+        }
+      });
+
+    }
+
+    playSound(){
+      if(false){
+        if(this.a_or_b){
+          this.b_sound.play();
+          this.a_or_b = !this.a_or_b;
+        }else{
+          this.a_sound.play();
+          this.a_or_b = !this.a_or_b;
+        }
+      }
+    }
+
+    makeTable(container,rows,cols){
+      var container = $('.'+container);
+      var width = container.innerWidth();
+      var height = container.innerHeight();
+      var tds = [];
+
+      // building map
+      for (var i = 0; i < rows; i++) {
+        var tr = $('<tr></tr>');
+        var temp_tds = [];
+        for (var j = 0; j < cols; j++) {
+          var box = $('<td class="box"></td>');
+          box.width(width/cols);
+          box.height(height/rows);
+
+          tr.append(box);
+          temp_tds.push(box);
+        }
+        container.append(tr);
+        tds.push(temp_tds);
+      }
+
+      return tds;
+    }
+
+    generateNewModel(){
+      var new_node = new Model(Math.floor((Math.random() * 7) + 1)); // Math.floor((Math.random() * 7) + 1)
+      return {
+        node : new_node,
+        posX : Math.floor(this.tds[0].length / 2) - Math.floor(new_node.n / 2),
+        posY : -new_node.n
+      }
+    }
+
+    setPos(){
+      var self = this;
+      this.actModel.node.lambdaFunction(function(i,j){
+        var x = self.actModel.posX + j;
+        var y = self.actModel.posY + i;
+        self.highestPoint = Math.max(self.tds.length - y,self.highestPoint);
+        if(self.goodPosition(x,y,self.tds)){
+          var act_td = self.tds[y][x];
+          act_td.attr('occupied','true');
+          act_td.css('background',self.actModel.node.color);
+        }
+      });
+    }
+
+    goodPosition(x,y,act_table){
+      if(0 <= x && x < act_table[0].length && 0 <= y && y < act_table.length ){
+        return true;
+      }
+
+      return false;
+    }
+
+    collision(moveX,moveY){
+      var self = this;
+      var coll = true;
+      this.actModel.node.lambdaFunction(function(i,j){
+        var x = self.actModel.posX + moveX + j;
+        var y = self.actModel.posY + moveY + i;
+
+        if(y >= self.tds.length || x < 0 || self.tds[0].length <= x){
+          coll = coll && false;
+        }else if(y >= 0 && self.tds[y][x].attr('occupied')){
+            coll = coll && false;
+        }
+      });
+      return !coll;
+    }
+
+    drawModel(actNode,act_table,offset = null){
+      var self = this;
+
+      for (var i = 0; i < act_table.length; i++) {
+        for (var j = 0; j < act_table[0].length; j++) {
+          if(!act_table[i][j].attr('occupied')){
+            act_table[i][j].css('background','black');
+          }
+        }
+      }
+
+      actNode.node.lambdaFunction(function(i,j){
+
+        var x = actNode.posX + j;
+        var y = actNode.posY + i;
+        if(offset != null){
+          x = offset.x + j;
+          y = offset.y + i;
+        }
+
+        if(self.goodPosition(x,y,act_table)){
+            act_table[y][x].css('background',actNode.node.color);
+        }
+
+      });
+
+
+    }
+
+    rowIsSaturated(){
+      var sat_count = 0;
+      var i = this.tds.length - 1;
+
+      while(i >= 0){
+        var isSaturated = true;
+        for (var j = 0; j < this.tds[0].length; j++) {
+          if(!this.tds[i][j].attr('occupied')){
+            isSaturated = false;
+          }
+        }
+        if(isSaturated){
+          this.moveRowsTo(i);
+          sat_count += 1;
+        }else{
+          i -= 1;
+        }
+      }
+
+      if(sat_count != 0){
+        var score_div = $($('.points')[0]);
+        var level_span = $($($('.points')[1]).find('span'));
+        var act_points = parseInt(score_div.html());
+        var new_points = sat_count * sat_count * 100;
+
+        var floating_score = $('<div class="floating_score"></div>');
+        floating_score.html(new_points).offset(
+          {
+            top:$('.tetris-table').offset().top + $('.tetris-box').height() - 100,
+            left:$('.tetris-table').offset().left + $('.tetris-box').width() / 2
+          }
+        );
+        $('body').append(floating_score);
+        floating_score.animate({
+          top: score_div.offset().top,
+          left: score_div.offset().left + score_div.width() - floating_score.width(),
+          opacity: 0.2
+        },500,function(){
+          floating_score.remove();
+
+          var footstep = new_points / 100;
+          var i = 0;
+          var actInterval = setInterval(function(){
+            act_points += footstep;
+            score_div.html(
+              '000000'.substring(0,6 - act_points.toString().length) + act_points.toString()
+            );
+
+            i += 1;
+            if(i >= 100){
+              clearInterval(actInterval);
+            }
+          },1500 / 100);
+        });
+        if(parseInt(level_span.html()) != Math.floor((act_points+new_points) / 3000)+1){
+          this.defaultSpeed -= 50;
+          this.fallingSpeed = this.defaultSpeed;
+        }
+        level_span.html(Math.floor((act_points+new_points) / 3000)+1);
+      }
+
+    }
+
+    moveRowsTo(row_to){
+      this.highestPoint -= 1;
+      for (var i = row_to - 1; i >= 0;   i--) {
+        for (var j = 0; j < this.tds[0].length; j++) {
+          if(i == 0){
+            this.tds[i][j].css('background','black');
+            this.tds[i][j].removeAttr('occupied');
+          }else{
+            this.tds[i+1][j].css('background-color', this.tds[i][j].css('background-color'));
+            if(this.tds[i][j].attr('occupied')){
+              this.tds[i+1][j].attr('occupied','true');
+            }else{
+              this.tds[i+1][j].removeAttr('occupied');
+            }
+          }
+        }
+      }
+    }
+
+  }
+
+  class Model {
+    constructor(type) {
+      this.color = ['#00f6ff','#4162f4','#f4b841','#41f443','#f44164','#d341f4','#f4f141'][type-1];
+      this.matrix = null;
+      this.n = null;
+      switch (type) {
+        case 1:
+          this.matrix = [
+            [0,0,0,0],
+            [0,0,0,0],
+            [0,0,0,0],
+            [1,1,1,1]
+          ];
+          this.n = 4;
+          break;
+        case 2:
+          this.matrix = [
+            [0,0,0],
+            [1,0,0],
+            [1,1,1]
+          ];
+          this.n = 3;
+          break;
+        case 3:
+          this.matrix = [
+            [0,0,0],
+            [0,0,1],
+            [1,1,1]
+          ];
+          this.n = 3;
+          break;
+        case 4:
+          this.matrix = [
+            [0,0,0],
+            [0,1,1],
+            [1,1,0]
+          ];
+          this.n = 3;
+          break;
+          case 5:
+            this.matrix = [
+              [0,0,0],
+              [1,1,0],
+              [0,1,1]
+            ];
+            this.n = 3;
+            break;
+          case 6:
+            this.matrix = [
+              [0,0,0],
+              [0,1,0],
+              [1,1,1]
+            ];
+            this.n = 3;
+            break;
+          case 7:
+            this.matrix = [
+              [1,1],
+              [1,1]
+            ];
+            this.n = 2;
+            break;
+      }
+
+      for (var i = 0; i < Math.floor((Math.random() * 7)); i++) {
+        this.rotate();
+      }
+    }
+
+    rotate(){
+      var new_matrix = [];
+      for(var i=0; i<this.n; i++) {
+          new_matrix[i] = new Array(this.n);
+      }
+
+      for (var i = 0; i < this.n; i++) {
+        for (var j = 0; j < this.n; j++) {
+          new_matrix[i][j] = this.matrix[this.n - j - 1][i];
+        }
+      }
+
+      this.matrix = new_matrix;
+    }
+
+    lambdaFunction(fn){
+
+      for (var i = 0; i < this.n; i++) {
+        for (var j = 0; j < this.n; j++) {
+          if(this.matrix[i][j] == 1){
+            fn(i,j);
+          }
+        }
+      }
+
+    }
+
+  }
+
+</script>
